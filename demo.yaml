@@ -1,0 +1,129 @@
+esphome:
+  name: WattCycle
+  friendly_name: WattCycle
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "WattCycle Fallback Hotspot"
+    password: !secret ap_password
+
+captive_portal:
+
+external_components:
+  - source: github://frabnet/esphome-wattcycle-ble
+
+# Switch to enable/disable BLE connection
+switch:
+  - platform: ble_client
+    ble_client_id: wattcycle_ble_client_batt1
+    name: "BATT1 BLE Connection"
+    restore_mode: RESTORE_DEFAULT_ON
+  - platform: ble_client
+    ble_client_id: wattcycle_ble_client_batt2
+    name: "BATT2 BLE Connection"
+    restore_mode: RESTORE_DEFAULT_ON
+
+# BLE tracker
+esp32_ble_tracker:
+  scan_parameters:
+    interval: 1100ms
+    window: 1100ms
+    active: true
+
+# BLE client
+ble_client:
+  - mac_address: "C0:D6:XX:XX:XX:XX"
+    id: wattcycle_ble_client_batt1
+  - mac_address: "C0:D6:XX:XX:XX:XX"
+    id: wattcycle_ble_client_batt2
+
+wattcycle_ble:
+  - ble_client_id: wattcycle_ble_client_batt1
+    update_interval: 10s
+    # Main battery values
+    battery_voltage:
+      name: "BATT1 Voltage"
+    battery_current:
+      name: "BATT1 Current"
+    battery_power:
+      name: "BATT1 Power"
+    soc:
+      name: "BATT1 SOC"
+
+    # Capacity / cycle counters
+    remaining_ah:
+      name: "BATT1 Remaining Capacity"
+    total_ah:
+      name: "BATT1 Total Capacity"
+    design_ah:
+      name: "BATT1 Design Capacity"
+    cycles:
+      name: "BATT1 Cycles"
+
+    # Temperatures
+    mos_temperature:
+      name: "BATT1 MOS Temperature"
+    pcb_temperature:
+      name: "BATT1 PCB Temperature"
+
+    # Cell voltage spread, in millivolts
+    cell_spread_mv:
+      name: "BATT1 Cell Spread"
+
+    # Per-cell voltages.
+    cells_v:
+      - name: "BATT1 Cell 01 Voltage"
+      - name: "BATT1 Cell 02 Voltage"
+      - name: "BATT1 Cell 03 Voltage"
+      - name: "BATT1 Cell 04 Voltage"
+
+    # Per-cell temperatures, if exposed by the BMS.
+    cell_temps:
+      - name: "BATT1 Cell Temp 01"
+      - name: "BATT1 Cell Temp 02"
+
+    # Product / identity text sensors
+    model_or_fw:
+      name: "BATT1 Model/Firmware"
+    manufacturer:
+      name: "BATT1 Manufacturer"
+    serial:
+      name: "BATT1 Serial"
+
+  - ble_client_id: wattcycle_ble_client_batt2    
+    update_interval: 10s
+    # Optional delay before polling;    
+    poll_offset: 2s
+    battery_voltage:
+      name: "BATT2 Voltage"
+    soc:
+      name: "BATT2 SOC"
+    remaining_ah:
+      name: "BATT2 Ah"
+    battery_current:
+      name: "BATT2 Current"
+    battery_power:
+      name: "BATT2 Power"
+    mos_temperature:
+      name: "BATT2 MOS Temperature"
