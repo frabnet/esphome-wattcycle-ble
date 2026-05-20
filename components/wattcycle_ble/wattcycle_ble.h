@@ -156,6 +156,7 @@ protected:
 	float parse_temperature_(uint16_t raw);
 	float parse_current_negative_(const uint8_t *buffer);
 	std::string hex_encode_(const uint8_t *data, size_t len);
+	std::string hex_dump_(const uint8_t *data, size_t len);
 	std::string trim_ascii_(const uint8_t *data, size_t len);
 };
 

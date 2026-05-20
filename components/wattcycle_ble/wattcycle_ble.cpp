@@ -181,13 +181,8 @@ void WattCycleBLE::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t
 		ESP_LOGD(TAG, "READ_CHAR handle=0x%04X len=%d",
 		         static_cast<unsigned>(param->read.handle), param->read.value_len);
 
-		std::string hex;
-		for (int i = 0; i < param->read.value_len; i++) {
-			char buf[4];
-			snprintf(buf, sizeof(buf), "%02X ", param->read.value[i]);
-			hex += buf;
-		}
-		ESP_LOGD(TAG, "READ data: %s", hex.c_str());
+		ESP_LOGD(TAG, "READ data: %s",
+		         this->hex_dump_(param->read.value, param->read.value_len).c_str());
 
 		this->handle_rx_bytes_(param->read.value, param->read.value_len);
 		break;
@@ -231,13 +226,8 @@ void WattCycleBLE::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t
 		ESP_LOGD(TAG, "NOTIFY received: handle=0x%04X expected=0x%04X len=%d",
 		         static_cast<unsigned>(param->notify.handle),
 		         static_cast<unsigned>(this->notify_handle_), param->notify.value_len);
-		std::string hex;
-		for (int i = 0; i < param->notify.value_len; i++) {
-			char buf[4];
-			snprintf(buf, sizeof(buf), "%02X ", param->notify.value[i]);
-			hex += buf;
-		}
-		ESP_LOGD(TAG, "NOTIFY data: %s", hex.c_str());
+		ESP_LOGD(TAG, "NOTIFY data: %s",
+		         this->hex_dump_(param->notify.value, param->notify.value_len).c_str());
 
 		this->handle_rx_bytes_(param->notify.value, param->notify.value_len);
 		break;
@@ -395,13 +385,7 @@ void WattCycleBLE::parse_frame_(const std::vector<uint8_t> &frame) {
 
 	if (calculated_crc != received_crc) {
 		ESP_LOGW(TAG, "CRC mismatch: calc=0x%04X recv=0x%04X", calculated_crc, received_crc);
-		std::string hex;
-		for (size_t i = 0; i < frame.size(); i++) {
-			char buf[4];
-			snprintf(buf, sizeof(buf), "%02X ", frame[i]);
-			hex += buf;
-		}
-		ESP_LOGW(TAG, "Frame: %s", hex.c_str());
+		ESP_LOGW(TAG, "Frame: %s", this->hex_dump_(frame.data(), frame.size()).c_str());
 		return;
 	}
 
@@ -417,14 +401,13 @@ void WattCycleBLE::parse_frame_(const std::vector<uint8_t> &frame) {
 		return;
 	}
 
-	const uint8_t *data      = &frame[8];
-	size_t         data_size = data_len;
+	const uint8_t *data = &frame[8];
 
 	if (start_addr == DP_ANALOG) {
-		this->parse_analog_data_(data, data_size);
+		this->parse_analog_data_(data, data_len);
 	} else if (start_addr == DP_PRODUCT) {
 		if (!this->product_read_) {
-			this->parse_product_data_(data, data_size);
+			this->parse_product_data_(data, data_len);
 			this->product_read_ = true;
 		}
 		this->last_poll_ = millis() - this->update_interval_;
@@ -621,11 +604,13 @@ void WattCycleBLE::parse_product_data_(const uint8_t *data, size_t len) {
 		manufacturer = this->trim_ascii_(data + 20, 20);
 		serial = this->trim_ascii_(data + 40, 20);
 	} else {
-		model_or_fw = this->hex_encode_(data, len);
-		manufacturer = "";
+		ESP_LOGW(TAG, "Unexpected product payload length: %zu", len);
+		model_or_fw = "unknown";
+		manufacturer = "unknown";
 		char buf[40];
-		snprintf(buf, sizeof(buf), "unexpected length %zu", len);
+		snprintf(buf, sizeof(buf), "unexpected length %zu: ", len);
 		serial = buf;
+		serial += this->hex_encode_(data, len);
 	}
 
 	ESP_LOGI(TAG, "Product model/fw: %s", model_or_fw.c_str());
@@ -653,7 +638,7 @@ uint16_t WattCycleBLE::calculate_crc16_(const uint8_t *data, size_t len) {
 		crc_lo = CRC_LO_TABLE[index];
 	}
 
-	// Return the high byte first
+	// Pack CRC bytes in protocol transmit order.
 	return (crc_lo << 8) | crc_hi;
 }
 
@@ -679,7 +664,21 @@ std::string WattCycleBLE::hex_encode_(const uint8_t *data, size_t len) {
 	out.reserve(len * 2);
 	for (size_t i = 0; i < len; i++) {
 		char buf[3];
-		snprintf(buf, sizeof(buf), "%02x", data[i]);
+		snprintf(buf, sizeof(buf), "%02X", data[i]);
+		out += buf;
+	}
+	return out;
+}
+
+std::string WattCycleBLE::hex_dump_(const uint8_t *data, size_t len) {
+	std::string out;
+	out.reserve(len * 3);
+	for (size_t i = 0; i < len; i++) {
+		if (i != 0) {
+			out += ' ';
+		}
+		char buf[3];
+		snprintf(buf, sizeof(buf), "%02X", data[i]);
 		out += buf;
 	}
 	return out;
