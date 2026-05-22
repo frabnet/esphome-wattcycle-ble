@@ -36,10 +36,6 @@ external_components:
 ```yaml
 # BLE tracker
 esp32_ble_tracker:
-  scan_parameters:
-    interval: 1100ms
-    window: 1100ms
-    active: true
 
 # BLE client
 ble_client:
