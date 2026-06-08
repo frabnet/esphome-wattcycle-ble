@@ -88,10 +88,16 @@ void WattCycleBLE::loop() {
 
 	// Match the reference flow: after "HiLink", give the BMS time before the first read.
 	if (this->post_auth_pending_) {
-		if (millis() - this->post_auth_pending_since_ >= 300 + this->poll_offset_) {
+		// On first connection use the full offset to stagger two BMS instances.
+		// On reconnects the two clients reconnect at naturally different times,
+		// so a shorter fixed delay (150ms) is enough.
+		uint32_t post_auth_delay = this->product_read_
+		    ? 150
+		    : 300 + this->poll_offset_;
+		if (millis() - this->post_auth_pending_since_ >= post_auth_delay) {
 			this->post_auth_pending_ = false;
 			this->last_poll_ = millis();
-			this->send_read_command_(DP_PRODUCT);
+			this->send_read_command_(this->product_read_ ? DP_ANALOG : DP_PRODUCT);
 		}
 		return;
 	}
@@ -117,9 +123,10 @@ void WattCycleBLE::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t
 		if (param->open.status == ESP_GATT_OK) {
 			ESP_LOGI(TAG, "Connected to WattCycle BMS");
 			// Reset state for a new connection.
+			// product_read_ is NOT reset here: it persists across reconnects
+			// so we skip the DP_PRODUCT round-trip after the first connection.
 			this->authenticated_      = false;
 			this->auth_sent_          = false;
-			this->product_read_       = false;
 			this->auth_pending_       = false;
 			this->post_auth_pending_  = false;
 			this->rx_buffer_.clear();
@@ -131,7 +138,8 @@ void WattCycleBLE::gattc_event_handler(esp_gattc_cb_event_t event, esp_gatt_if_t
 		ESP_LOGW(TAG, "Disconnected from WattCycle BMS");
 		this->authenticated_      = false;
 		this->auth_sent_          = false;
-		this->product_read_       = false;
+		// product_read_ is intentionally NOT reset: model/serial never changes,
+		// so on reconnect we skip DP_PRODUCT and go straight to DP_ANALOG.
 		this->auth_pending_       = false;
 		this->post_auth_pending_  = false;
 		this->notify_handle_      = 0;
@@ -267,7 +275,7 @@ void WattCycleBLE::authenticate_() {
 	                  auth_char->handle,
 	                  sizeof(auth_data),
 	                  auth_data,
-	                  ESP_GATT_WRITE_TYPE_RSP,
+	                  ESP_GATT_WRITE_TYPE_NO_RSP,  // ACK not needed: post_auth delay follows
 	                  ESP_GATT_AUTH_REQ_NONE);
 
 	if (status == ESP_GATT_OK) {
